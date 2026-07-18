@@ -8,7 +8,7 @@ exports.register = async (req, res) => {
     const { name, email, password } = req.body;
 
     if (!name || !email || !password) {
-      return res.status(400).json({ error: "Name, email, and password are required" });
+      return res.status(400).json({ error: "Name, email, and password are required", message: "Name, email, and password are required" });
     }
 
     // ADD THIS CHECK
@@ -17,7 +17,7 @@ exports.register = async (req, res) => {
     });
 
     if (existingUser) {
-      return res.status(400).json({ error: "User already exists" });
+      return res.status(400).json({ error: "User already exists", message: "User already exists" });
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
