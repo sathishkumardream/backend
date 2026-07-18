@@ -1,0 +1,130 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        Int      @id @default(autoincrement())
+  name      String
+  email     String   @unique
+  password  String
+  role      String   @default("USER")
+  createdAt DateTime @default(now())
+
+  cart   Cart[]
+  orders Order[]
+}
+
+model Promotion {
+  id            Int      @id @default(autoincrement())
+  code          String   @unique
+  type          String   // "PERCENT" | "FLAT" | "SHIPPING"
+  value         Float    @default(0)
+  minOrderValue Float    @default(0)
+  active        Boolean  @default(true)
+  expiresAt     DateTime?
+  usageLimit    Int?
+  usedCount     Int      @default(0)
+  createdAt     DateTime @default(now())
+
+  orders Order[]
+}
+
+model Category {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique
+  createdAt DateTime @default(now())
+
+  products Product[]
+}
+
+model Product {
+  id            Int      @id @default(autoincrement())
+  name          String
+  description   String
+  price         Float
+  originalPrice Float?
+  stock         Int
+  image         String
+  sizes         String?  // comma-separated, e.g. "S,M,L,XL" — null/empty means no size selector shown
+  colors        String?  // comma-separated hex codes, e.g. "#2c3e50,#c9184a" — null/empty means no color selector shown
+  categoryId    Int
+  category      Category @relation(fields: [categoryId], references: [id])
+  createdAt     DateTime @default(now())
+
+  cartItems  CartItem[]
+  orderItems OrderItem[]
+}
+
+model Cart {
+  id        Int        @id @default(autoincrement())
+  userId    Int        @unique
+  user      User       @relation(fields: [userId], references: [id])
+  items     CartItem[]
+  createdAt DateTime   @default(now())
+}
+
+model CartItem {
+  id        Int @id @default(autoincrement())
+  cartId    Int
+  productId Int
+  quantity  Int
+
+  cart    Cart    @relation(fields: [cartId], references: [id])
+  product Product @relation(fields: [productId], references: [id])
+
+  @@unique([cartId, productId])
+}
+
+enum OrderStatus {
+  PENDING
+  PAID
+  SHIPPED
+  DELIVERED
+}
+
+model Order {
+  id            Int         @id @default(autoincrement())
+  userId        Int
+  subtotal      Float       @default(0)
+  discount      Float       @default(0)
+  shippingFee   Float       @default(0)
+  total         Float
+  status        OrderStatus @default(PENDING)
+  paymentMethod String      @default("COD")
+  shippingName  String?
+  shippingPhone String?
+  shippingLine1 String?
+  shippingLine2 String?
+  shippingCity  String?
+  shippingState String?
+  shippingPincode String?
+  promotionId   Int?
+  promotion     Promotion?  @relation(fields: [promotionId], references: [id])
+  createdAt     DateTime    @default(now())
+
+  user       User        @relation(fields: [userId], references: [id])
+  orderItems OrderItem[]
+}
+
+model OrderItem {
+  id Int @id @default(autoincrement())
+
+  orderId   Int
+  productId Int
+  quantity  Int
+  price     Float
+
+  order   Order   @relation(fields: [orderId], references: [id])
+  product Product @relation(fields: [productId], references: [id])
+}
