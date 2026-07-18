@@ -5,15 +5,18 @@ const prisma = new PrismaClient();
 // Create Product
 exports.createProduct = async (req, res) => {
   try {
-    const { name, description, price, stock, image, categoryId } = req.body;
+    const { name, description, price, originalPrice, stock, image, sizes, colors, categoryId } = req.body;
 
     const product = await prisma.product.create({
       data: {
         name,
         description,
         price,
+        originalPrice: originalPrice ? Number(originalPrice) : null,
         stock,
         image,
+        sizes: sizes || null,
+        colors: colors || null,
         category: {
           connect: { id: categoryId }
         }
@@ -68,7 +71,7 @@ exports.updateProduct = async (req, res) => {
 
   try {
 
-    const { name, description, price, stock, image, categoryId } = req.body;
+    const { name, description, price, originalPrice, stock, image, sizes, colors, categoryId } = req.body;
 
     const product = await prisma.product.update({
       where: { id: Number(req.params.id) },
@@ -76,8 +79,11 @@ exports.updateProduct = async (req, res) => {
         name,
         description,
         price,
+        originalPrice: originalPrice ? Number(originalPrice) : null,
         stock,
         image,
+        sizes: sizes || null,
+        colors: colors || null,
         categoryId
       }
     });
