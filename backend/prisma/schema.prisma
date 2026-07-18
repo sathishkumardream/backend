@@ -49,15 +49,18 @@ model Category {
 }
 
 model Product {
-  id          Int      @id @default(autoincrement())
-  name        String
-  description String
-  price       Float
-  stock       Int
-  image       String
-  categoryId  Int
-  category    Category @relation(fields: [categoryId], references: [id])
-  createdAt   DateTime @default(now())
+  id            Int      @id @default(autoincrement())
+  name          String
+  description   String
+  price         Float
+  originalPrice Float?
+  stock         Int
+  image         String
+  sizes         String?  // comma-separated, e.g. "S,M,L,XL" — null/empty means no size selector shown
+  colors        String?  // comma-separated hex codes, e.g. "#2c3e50,#c9184a" — null/empty means no color selector shown
+  categoryId    Int
+  category      Category @relation(fields: [categoryId], references: [id])
+  createdAt     DateTime @default(now())
 
   cartItems  CartItem[]
   orderItems OrderItem[]
