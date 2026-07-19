@@ -134,25 +134,23 @@ exports.forgotPassword = async (req, res) => {
     const frontendUrl = (process.env.FRONTEND_URL || "http://localhost:3000").split(",")[0].trim();
     const resetLink = `${frontendUrl}/reset-password?token=${rawToken}`;
 
-    try {
-      await sendEmail({
-        to: user.email,
-        subject: "Reset your Elma's Fashion password",
-        html: `
-          <p>Hi ${user.name},</p>
-          <p>We received a request to reset your password. This link expires in 1 hour:</p>
-          <p><a href="${resetLink}">${resetLink}</a></p>
-          <p>If you didn't request this, you can safely ignore this email.</p>
-        `,
-        text: `Reset your password: ${resetLink} (expires in 1 hour). If you didn't request this, ignore this email.`
-      });
-    } catch (emailError) {
-      // Don't fail the request just because email delivery had an issue —
-      // log it server-side for the admin to notice, but the user still sees the generic message.
-      console.error("Failed to send password reset email:", emailError.message);
-    }
-
+    // Respond immediately — don't make the user wait on email delivery, which can be slow
+    // or fail. The email is sent in the background; any failure is only logged server-side.
     res.json(genericResponse);
+
+    sendEmail({
+      to: user.email,
+      subject: "Reset your Elma's Fashion password",
+      html: `
+        <p>Hi ${user.name},</p>
+        <p>We received a request to reset your password. This link expires in 1 hour:</p>
+        <p><a href="${resetLink}">${resetLink}</a></p>
+        <p>If you didn't request this, you can safely ignore this email.</p>
+      `,
+      text: `Reset your password: ${resetLink} (expires in 1 hour). If you didn't request this, ignore this email.`
+    }).catch((emailError) => {
+      console.error("Failed to send password reset email:", emailError.message);
+    });
 
   } catch (error) {
     res.status(500).json({ error: error.message });
