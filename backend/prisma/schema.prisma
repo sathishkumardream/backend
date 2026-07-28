@@ -58,14 +58,33 @@ model Product {
   originalPrice Float?
   stock         Int
   image         String
-  sizes         String?  // comma-separated, e.g. "S,M,L,XL" — null/empty means no size selector shown
-  colors        String?  // comma-separated hex codes, e.g. "#2c3e50,#c9184a" — null/empty means no color selector shown
+  sizes         String?  // comma-separated, e.g. "S,M,L,XL" — legacy display-only, ignored once real variants exist
+  colors        String?  // comma-separated hex codes — legacy display-only, ignored once real variants exist
+  subcategory   String?
   categoryId    Int
   category      Category @relation(fields: [categoryId], references: [id])
   createdAt     DateTime @default(now())
 
   cartItems  CartItem[]
   orderItems OrderItem[]
+  variants   ProductVariant[]
+}
+
+model ProductVariant {
+  id        Int      @id @default(autoincrement())
+  productId Int
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  size      String?
+  color     String?
+  price     Float?   // optional override; null = use the parent product's price
+  stock     Int      @default(0)
+  sku       String?  @unique
+  createdAt DateTime @default(now())
+
+  cartItems  CartItem[]
+  orderItems OrderItem[]
+
+  @@unique([productId, size, color])
 }
 
 model Cart {
@@ -80,12 +99,12 @@ model CartItem {
   id        Int @id @default(autoincrement())
   cartId    Int
   productId Int
+  variantId Int?
   quantity  Int
 
-  cart    Cart    @relation(fields: [cartId], references: [id])
-  product Product @relation(fields: [productId], references: [id])
-
-  @@unique([cartId, productId])
+  cart    Cart            @relation(fields: [cartId], references: [id])
+  product Product         @relation(fields: [productId], references: [id])
+  variant ProductVariant? @relation(fields: [variantId], references: [id], onDelete: SetNull)
 }
 
 enum OrderStatus {
@@ -124,9 +143,11 @@ model OrderItem {
 
   orderId   Int
   productId Int
+  variantId Int?
   quantity  Int
   price     Float
 
-  order   Order   @relation(fields: [orderId], references: [id])
-  product Product @relation(fields: [productId], references: [id])
+  order   Order           @relation(fields: [orderId], references: [id])
+  product Product         @relation(fields: [productId], references: [id])
+  variant ProductVariant? @relation(fields: [variantId], references: [id], onDelete: SetNull)
 }
