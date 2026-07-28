@@ -61,6 +61,7 @@ model Product {
   sizes         String?  // comma-separated, e.g. "S,M,L,XL" — legacy display-only, ignored once real variants exist
   colors        String?  // comma-separated hex codes — legacy display-only, ignored once real variants exist
   subcategory   String?
+  active        Boolean  @default(true)
   categoryId    Int
   category      Category @relation(fields: [categoryId], references: [id])
   createdAt     DateTime @default(now())

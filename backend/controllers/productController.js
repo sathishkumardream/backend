@@ -39,7 +39,10 @@ exports.createProduct = async (req, res) => {
 exports.getProducts = async (req, res) => {
   try {
 
+    const where = req.query.activeOnly === "true" ? { active: true } : {};
+
     const products = await prisma.product.findMany({
+      where,
       include: PRODUCT_INCLUDE
     });
 
@@ -75,22 +78,24 @@ exports.updateProduct = async (req, res) => {
 
   try {
 
-    const { name, description, price, originalPrice, stock, image, sizes, colors, subcategory, categoryId } = req.body;
+    const { name, description, price, originalPrice, stock, image, sizes, colors, subcategory, categoryId, active } = req.body;
+
+    const data = {};
+    if (name !== undefined) data.name = name;
+    if (description !== undefined) data.description = description;
+    if (price !== undefined) data.price = price;
+    if (originalPrice !== undefined) data.originalPrice = originalPrice ? Number(originalPrice) : null;
+    if (stock !== undefined) data.stock = stock;
+    if (image !== undefined) data.image = image;
+    if (sizes !== undefined) data.sizes = sizes || null;
+    if (colors !== undefined) data.colors = colors || null;
+    if (subcategory !== undefined) data.subcategory = subcategory || null;
+    if (categoryId !== undefined) data.categoryId = categoryId;
+    if (active !== undefined) data.active = Boolean(active);
 
     const product = await prisma.product.update({
       where: { id: Number(req.params.id) },
-      data: {
-        name,
-        description,
-        price,
-        originalPrice: originalPrice ? Number(originalPrice) : null,
-        stock,
-        image,
-        sizes: sizes || null,
-        colors: colors || null,
-        subcategory: subcategory || null,
-        categoryId
-      },
+      data,
       include: PRODUCT_INCLUDE
     });
 
@@ -103,19 +108,24 @@ exports.updateProduct = async (req, res) => {
 };
 
 
-// Delete Product
+// Delete Product — soft delete (archive). Products that have been ordered can't be
+// hard-deleted without breaking historical order records, so "Delete" here just hides
+// the product from the storefront while preserving it for past orders and reporting.
+// Use PUT with { active: true } to bring a product back.
 exports.deleteProduct = async (req, res) => {
 
   try {
 
-    await prisma.product.delete({
-      where: { id: Number(req.params.id) }
+    const product = await prisma.product.update({
+      where: { id: Number(req.params.id) },
+      data: { active: false },
+      include: PRODUCT_INCLUDE
     });
 
-    res.json({ message: "Product deleted" });
+    res.json({ message: "Product archived (hidden from the storefront, order history preserved)", product });
 
   } catch (error) {
-    res.status(500).json({ error: error.message || "Error deleting product" });
+    res.status(500).json({ error: error.message || "Error archiving product" });
   }
 
 };
@@ -328,6 +338,7 @@ exports.bulkUploadProducts = async (req, res) => {
           image: get(firstRow, "image_url") || (product?.image ?? ""),
           subcategory: get(firstRow, "subcategory") || null,
           categoryId: category.id,
+          active: true, // re-uploading implies the admin wants it live, even if it was previously archived
         };
 
         if (product) {
