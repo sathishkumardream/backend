@@ -58,6 +58,7 @@ model Product {
   originalPrice Float?
   stock         Int
   image         String
+  images        String[] @default([])
   sizes         String?  // comma-separated, e.g. "S,M,L,XL" — legacy display-only, ignored once real variants exist
   colors        String?  // comma-separated hex codes — legacy display-only, ignored once real variants exist
   subcategory   String?
@@ -80,6 +81,7 @@ model ProductVariant {
   price     Float?   // optional override; null = use the parent product's price
   stock     Int      @default(0)
   sku       String?  @unique
+  image     String?
   createdAt DateTime @default(now())
 
   cartItems  CartItem[]

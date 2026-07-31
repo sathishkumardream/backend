@@ -7,7 +7,7 @@ const PRODUCT_INCLUDE = { category: true, variants: { orderBy: { id: "asc" } } }
 // Create Product
 exports.createProduct = async (req, res) => {
   try {
-    const { name, description, price, originalPrice, stock, image, sizes, colors, subcategory, categoryId } = req.body;
+    const { name, description, price, originalPrice, stock, image, images, sizes, colors, subcategory, categoryId } = req.body;
 
     const product = await prisma.product.create({
       data: {
@@ -17,6 +17,7 @@ exports.createProduct = async (req, res) => {
         originalPrice: originalPrice ? Number(originalPrice) : null,
         stock,
         image,
+        images: Array.isArray(images) ? images : [],
         sizes: sizes || null,
         colors: colors || null,
         subcategory: subcategory || null,
@@ -78,7 +79,7 @@ exports.updateProduct = async (req, res) => {
 
   try {
 
-    const { name, description, price, originalPrice, stock, image, sizes, colors, subcategory, categoryId, active } = req.body;
+    const { name, description, price, originalPrice, stock, image, images, sizes, colors, subcategory, categoryId, active } = req.body;
 
     const data = {};
     if (name !== undefined) data.name = name;
@@ -87,6 +88,7 @@ exports.updateProduct = async (req, res) => {
     if (originalPrice !== undefined) data.originalPrice = originalPrice ? Number(originalPrice) : null;
     if (stock !== undefined) data.stock = stock;
     if (image !== undefined) data.image = image;
+    if (images !== undefined) data.images = Array.isArray(images) ? images : [];
     if (sizes !== undefined) data.sizes = sizes || null;
     if (colors !== undefined) data.colors = colors || null;
     if (subcategory !== undefined) data.subcategory = subcategory || null;
@@ -139,7 +141,7 @@ exports.deleteProduct = async (req, res) => {
 exports.createVariant = async (req, res) => {
   try {
     const productId = Number(req.params.productId);
-    const { size, color, price, stock, sku } = req.body;
+    const { size, color, price, stock, sku, image } = req.body;
 
     const variant = await prisma.productVariant.create({
       data: {
@@ -149,6 +151,7 @@ exports.createVariant = async (req, res) => {
         price: price !== undefined && price !== "" ? Number(price) : null,
         stock: Number(stock) || 0,
         sku: sku || null,
+        image: image || null,
       }
     });
 
@@ -164,7 +167,7 @@ exports.createVariant = async (req, res) => {
 // Update a variant
 exports.updateVariant = async (req, res) => {
   try {
-    const { size, color, price, stock, sku } = req.body;
+    const { size, color, price, stock, sku, image } = req.body;
 
     const data = {};
     if (size !== undefined) data.size = size || null;
@@ -172,6 +175,7 @@ exports.updateVariant = async (req, res) => {
     if (price !== undefined) data.price = price !== "" ? Number(price) : null;
     if (stock !== undefined) data.stock = Number(stock);
     if (sku !== undefined) data.sku = sku || null;
+    if (image !== undefined) data.image = image || null;
 
     const variant = await prisma.productVariant.update({
       where: { id: Number(req.params.id) },
@@ -204,8 +208,8 @@ exports.deleteVariant = async (req, res) => {
 
 const REQUIRED_COLUMNS = ["product_name", "price", "stock", "category"];
 const ALL_COLUMNS = [
-  "product_name", "description", "price", "original_price", "stock", "image_url",
-  "category", "subcategory", "variant_size", "variant_color", "variant_price", "variant_stock", "variant_sku"
+  "product_name", "description", "price", "original_price", "stock", "image_url", "image_urls",
+  "category", "subcategory", "variant_size", "variant_color", "variant_price", "variant_stock", "variant_sku", "variant_image"
 ];
 
 // Minimal RFC4180-style CSV line parser — handles quoted fields containing commas.
@@ -243,15 +247,18 @@ exports.getBulkUploadTemplate = async (req, res) => {
   const header = ALL_COLUMNS.join(",");
   const example1 = [
     "Classic Cotton Tee", "A soft, breathable everyday t-shirt.", "599", "799", "0",
-    "https://example.com/images/tee.jpg", "Men", "T-Shirts", "S", "#2c3e50", "", "20", "TEE-BLK-S"
+    "https://example.com/images/tee.jpg", "https://example.com/images/tee.jpg|https://example.com/images/tee-back.jpg",
+    "Men", "T-Shirts", "S", "#2c3e50", "", "20", "TEE-BLK-S", "https://example.com/images/tee-black.jpg"
   ].map(v => `"${v}"`).join(",");
   const example2 = [
     "Classic Cotton Tee", "", "", "", "0",
-    "", "", "", "M", "#2c3e50", "", "15", "TEE-BLK-M"
+    "", "",
+    "", "", "M", "#2c3e50", "", "15", "TEE-BLK-M", "https://example.com/images/tee-black.jpg"
   ].map(v => `"${v}"`).join(",");
   const example3 = [
     "Simple Tote Bag", "A no-fuss canvas tote.", "349", "", "40",
-    "https://example.com/images/tote.jpg", "Accessories", "Bags", "", "", "", "", ""
+    "https://example.com/images/tote.jpg", "",
+    "Accessories", "Bags", "", "", "", "", "", ""
   ].map(v => `"${v}"`).join(",");
 
   const csv = [header, example1, example2, example3].join("\n");
@@ -329,6 +336,9 @@ exports.bulkUploadProducts = async (req, res) => {
         // Does this product already exist? Match by exact name (case-insensitive).
         let product = await prisma.product.findFirst({ where: { name: { equals: group.name, mode: "insensitive" } } });
 
+        const imageUrlsRaw = get(firstRow, "image_urls");
+        const imageUrls = imageUrlsRaw ? imageUrlsRaw.split("|").map(s => s.trim()).filter(Boolean) : (product?.images ?? []);
+
         const productData = {
           name: group.name,
           description: get(firstRow, "description") || (product?.description ?? ""),
@@ -336,6 +346,7 @@ exports.bulkUploadProducts = async (req, res) => {
           originalPrice: get(firstRow, "original_price") ? Number(get(firstRow, "original_price")) : null,
           stock,
           image: get(firstRow, "image_url") || (product?.image ?? ""),
+          images: imageUrls,
           subcategory: get(firstRow, "subcategory") || null,
           categoryId: category.id,
           active: true, // re-uploading implies the admin wants it live, even if it was previously archived
@@ -361,6 +372,7 @@ exports.bulkUploadProducts = async (req, res) => {
             price: get(row, "variant_price") ? Number(get(row, "variant_price")) : null,
             stock: Number(get(row, "variant_stock")) || 0,
             sku: get(row, "variant_sku") || null,
+            image: get(row, "variant_image") || null,
           };
 
           const existingVariant = await prisma.productVariant.findFirst({
