@@ -15,7 +15,7 @@ exports.getDesigns = async (req, res) => {
 // 👑 ADMIN — create a design
 exports.createDesign = async (req, res) => {
   try {
-    const { name, image, comboType, tag, basePrice, sizePricing } = req.body;
+    const { name, image, comboType, tag, basePrice } = req.body;
 
     if (!name || !image || !comboType || !basePrice) {
       return res.status(400).json({ error: "name, image, comboType, and basePrice are required" });
@@ -28,7 +28,6 @@ exports.createDesign = async (req, res) => {
         comboType,
         tag: tag || null,
         basePrice: Number(basePrice),
-        sizePricing: sizePricing && Object.keys(sizePricing).length > 0 ? sizePricing : undefined,
       }
     });
 
@@ -41,7 +40,7 @@ exports.createDesign = async (req, res) => {
 // 👑 ADMIN — update a design
 exports.updateDesign = async (req, res) => {
   try {
-    const { name, image, comboType, tag, basePrice, sizePricing, active } = req.body;
+    const { name, image, comboType, tag, basePrice, active } = req.body;
 
     const data = {};
     if (name !== undefined) data.name = name;
@@ -49,7 +48,6 @@ exports.updateDesign = async (req, res) => {
     if (comboType !== undefined) data.comboType = comboType;
     if (tag !== undefined) data.tag = tag || null;
     if (basePrice !== undefined) data.basePrice = Number(basePrice);
-    if (sizePricing !== undefined) data.sizePricing = sizePricing && Object.keys(sizePricing).length > 0 ? sizePricing : null;
     if (active !== undefined) data.active = Boolean(active);
 
     const design = await prisma.customDesign.update({

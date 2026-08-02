@@ -1,35 +1,53 @@
 const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
 
-// Flat stitching-service fees, used when a design's own pricing doesn't apply.
-// (No admin UI to configure these yet — easy to move into settings later if needed.)
-const STITCHING_ONLY_FEE = 799;       // customer provides their own fabric
-const STORE_FABRIC_STITCHING_FEE = 599; // added on top of a real store product's price
-
 const CUSTOM_ORDER_INCLUDE = { design: true, sourceProduct: true };
 const VALID_STATUSES = ["PENDING", "CONFIRMED", "IN_PROGRESS", "SHIPPED", "DELIVERED"];
+
+async function getStitchingSettingsOrDefault() {
+  const settings = await prisma.stitchingSettings.findUnique({ where: { id: 1 } });
+  if (settings) return settings;
+  return { sizePricing: { S: 499, M: 599, L: 699, XL: 799, XXL: 899 }, ownFabricFee: 799 };
+}
+
+// Computes one recipient's stitching cost from the global size-fee table.
+// Custom (non-standard) measurements use the flat "ownFabricFee" as a stitching-labor baseline,
+// since a garment made to bespoke measurements doesn't map to a fixed size bracket.
+function stitchingCostFor(recipient, settings) {
+  if (recipient.sizeMode === "standard" && recipient.standardSize) {
+    const fee = settings.sizePricing?.[recipient.standardSize];
+    if (fee != null) return Number(fee);
+  }
+  return settings.ownFabricFee;
+}
 
 // 🛍️ CREATE — customer submits a "Made For You" request
 exports.createCustomOrder = async (req, res) => {
   try {
     const userId = req.user.userId;
     const {
-      designId, sourceProductId, comboType, fabricType, fabricChoice,
-      sizeMode, standardSize, measurements, notes
+      designId, sourceProductId, comboType, fabricType,
+      recipients, blouseType, neckPattern, backDesign, referenceImage, notes
     } = req.body;
 
-    if (!comboType || !fabricType || !sizeMode) {
-      return res.status(400).json({ message: "comboType, fabricType, and sizeMode are required" });
+    if (!comboType || !fabricType) {
+      return res.status(400).json({ message: "comboType and fabricType are required" });
     }
-    if (sizeMode === "standard" && !standardSize) {
-      return res.status(400).json({ message: "Please select a standard size" });
+    if (!Array.isArray(recipients) || recipients.length === 0) {
+      return res.status(400).json({ message: "Please add at least one person/garment to this combo request" });
     }
-    if (sizeMode === "custom" && (!measurements || Object.keys(measurements).length === 0)) {
-      return res.status(400).json({ message: "Please provide your measurements" });
+    for (const r of recipients) {
+      if (!r.label) return res.status(400).json({ message: "Each garment needs a label (e.g. 'Mom', 'Daughter 1')" });
+      if (r.sizeMode === "standard" && !r.standardSize) {
+        return res.status(400).json({ message: `Please select a size for "${r.label}"` });
+      }
+      if (r.sizeMode === "custom" && (!r.measurements || Object.values(r.measurements).some(v => !v))) {
+        return res.status(400).json({ message: `Please provide complete measurements for "${r.label}"` });
+      }
     }
 
-    // Price is always computed server-side — never trust a price sent from the client.
-    let price;
+    // Fabric/design cost is always computed server-side — never trust a price sent from the client.
+    let fabricCost;
     let design = null;
     let sourceProduct = null;
 
@@ -37,21 +55,27 @@ exports.createCustomOrder = async (req, res) => {
       if (!designId) return res.status(400).json({ message: "Please select a design" });
       design = await prisma.customDesign.findUnique({ where: { id: designId } });
       if (!design || !design.active) return res.status(400).json({ message: "That design is no longer available" });
-
-      if (sizeMode === "standard" && design.sizePricing && design.sizePricing[standardSize] != null) {
-        price = Number(design.sizePricing[standardSize]);
-      } else {
-        price = design.basePrice;
-      }
+      fabricCost = design.basePrice;
     } else if (fabricType === "store-product") {
       if (!sourceProductId) return res.status(400).json({ message: "Please select a saree from the store" });
       sourceProduct = await prisma.product.findUnique({ where: { id: sourceProductId } });
       if (!sourceProduct || !sourceProduct.active) return res.status(400).json({ message: "That product is no longer available" });
-      price = sourceProduct.price + STORE_FABRIC_STITCHING_FEE;
+      fabricCost = sourceProduct.price;
     } else {
-      // "own" — customer supplies their own fabric, just paying for stitching
-      price = STITCHING_ONLY_FEE;
+      fabricCost = 0; // "own" — customer supplies their own fabric, no fabric cost to us
     }
+
+    // Stitching cost: one garment per recipient, priced by size from the global fee table.
+    const settings = await getStitchingSettingsOrDefault();
+    const pricedRecipients = recipients.map(r => ({
+      label: r.label,
+      sizeMode: r.sizeMode,
+      standardSize: r.sizeMode === "standard" ? r.standardSize : null,
+      measurements: r.sizeMode === "custom" ? r.measurements : null,
+      stitchingCost: stitchingCostFor(r, settings),
+    }));
+    const stitchingCost = pricedRecipients.reduce((sum, r) => sum + r.stitchingCost, 0);
+    const price = fabricCost + stitchingCost;
 
     const customOrder = await prisma.customOrder.create({
       data: {
@@ -60,11 +84,14 @@ exports.createCustomOrder = async (req, res) => {
         sourceProductId: sourceProduct ? sourceProduct.id : null,
         comboType,
         fabricType,
-        fabricChoice: fabricChoice || null,
-        sizeMode,
-        standardSize: standardSize || null,
-        measurements: measurements || undefined,
+        recipients: pricedRecipients,
+        blouseType: blouseType || null,
+        neckPattern: neckPattern || null,
+        backDesign: backDesign || null,
+        referenceImage: referenceImage || null,
         notes: notes || null,
+        fabricCost,
+        stitchingCost,
         price,
       },
       include: CUSTOM_ORDER_INCLUDE

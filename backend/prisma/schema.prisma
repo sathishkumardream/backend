@@ -160,17 +160,26 @@ model OrderItem {
 // ─── Made For You (custom stitching) ───────────────────────────────────────
 
 model CustomDesign {
-  id          Int      @id @default(autoincrement())
-  name        String
-  image       String
-  comboType   String   // "Mom & Daughter" | "Sisters Combo" | "Designer Blouse" | ...
-  tag         String?  // e.g. "New", "Trending"
-  basePrice   Float
-  sizePricing Json?    // optional per-size overrides, e.g. { "S": 800, "M": 850, "L": 900 }
-  active      Boolean  @default(true)
-  createdAt   DateTime @default(now())
+  id        Int      @id @default(autoincrement())
+  name      String
+  image     String
+  comboType String   // "Mom & Daughter" | "Sisters Combo" | "Designer Blouse" | ...
+  tag       String?  // e.g. "New", "Trending"
+  basePrice Float    // fabric/design cost — one-time, shared across all recipients in a combo
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
 
   customOrders CustomOrder[]
+}
+
+// Global, admin-configurable stitching labor cost by standard size — applied per garment/recipient,
+// on top of the one-time fabric cost, regardless of whether the fabric came from a design, a real
+// store saree, or the customer's own material.
+model StitchingSettings {
+  id          Int      @id @default(1)
+  sizePricing Json     // e.g. { "S": 499, "M": 599, "L": 699, "XL": 799, "XXL": 899 }
+  ownFabricFee Float   @default(799) // flat fallback when a recipient's size isn't in sizePricing
+  updatedAt   DateTime @updatedAt
 }
 
 model CustomOrder {
@@ -184,17 +193,26 @@ model CustomOrder {
   sourceProductId Int?
   sourceProduct   Product? @relation(fields: [sourceProductId], references: [id], onDelete: SetNull)
 
-  comboType    String
-  fabricType   String  // "design" | "own" | "store-product"
-  fabricChoice String?
+  comboType  String
+  fabricType String  // "design" | "own" | "store-product"
 
-  sizeMode     String  // "standard" | "custom"
-  standardSize String?
-  measurements Json?
+  // One combo request can cover several people/garments cut from the same fabric —
+  // e.g. a Mom & Daughter combo needs two separately sized garments from one saree.
+  // Each entry: { label, sizeMode: "standard"|"custom", standardSize, measurements, stitchingCost }
+  recipients Json
 
-  notes  String?
-  price  Float
-  status String @default("PENDING") // PENDING, CONFIRMED, IN_PROGRESS, SHIPPED, DELIVERED
+  // Stitching/tailoring details so the tailor knows exactly what to make — not just "notes".
+  blouseType    String? // e.g. "Sleeveless", "Short Sleeve", "Full Sleeve", "3/4 Sleeve"
+  neckPattern   String? // e.g. "Round", "Boat", "Sweetheart", "Collar", "Backless"
+  backDesign    String? // e.g. "Regular", "Deep Back", "Keyhole", "Tie-Back"
+  referenceImage String? // optional photo the customer uploads showing the exact look they want
+
+  notes String?
+
+  fabricCost    Float // one-time cost of the fabric/design (0 if customer supplied their own)
+  stitchingCost Float // sum of every recipient's stitching cost
+  price         Float // fabricCost + stitchingCost — grand total
+  status        String @default("PENDING") // PENDING, CONFIRMED, IN_PROGRESS, SHIPPED, DELIVERED
 
   createdAt DateTime @default(now())
 }
