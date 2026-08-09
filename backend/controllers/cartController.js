@@ -1,6 +1,12 @@
 const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
 
+const CART_INCLUDE = {
+  items: {
+    include: { product: true, variant: true }
+  }
+};
+
 
 // 🛒 Get Cart
 exports.getCart = async (req, res) => {
@@ -9,20 +15,14 @@ exports.getCart = async (req, res) => {
 
     let cart = await prisma.cart.findUnique({
       where: { userId },
-      include: {
-        items: {
-          include: { product: true }
-        }
-      }
+      include: CART_INCLUDE
     });
 
     // create cart if not exists
     if (!cart) {
       cart = await prisma.cart.create({
         data: { userId },
-        include: {
-          items: true
-        }
+        include: CART_INCLUDE
       });
     }
 
@@ -38,7 +38,7 @@ exports.getCart = async (req, res) => {
 exports.addToCart = async (req, res) => {
   try {
     const userId = req.user.userId; // ✅ from JWT
-    const { productId, quantity } = req.body;
+    const { productId, quantity, variantId } = req.body;
 
     // ✅ check product FIRST
     const product = await prisma.product.findUnique({
@@ -47,6 +47,15 @@ exports.addToCart = async (req, res) => {
 
     if (!product) {
       return res.status(400).json({ error: "Product not found" });
+    }
+
+    // If a variant was specified, make sure it actually belongs to this product
+    let variant = null;
+    if (variantId) {
+      variant = await prisma.productVariant.findUnique({ where: { id: variantId } });
+      if (!variant || variant.productId !== productId) {
+        return res.status(400).json({ error: "Variant not found for this product" });
+      }
     }
 
     // find or create cart
@@ -60,28 +69,23 @@ exports.addToCart = async (req, res) => {
       });
     }
 
-    // check if item already exists
-    const existingItem = await prisma.cartItem.findUnique({
+    // check if this exact product+variant combination is already in the cart.
+    // (findFirst instead of a DB unique constraint, since variantId can be null
+    // for simple products and Postgres treats NULL as never equal to NULL.)
+    const existingItem = await prisma.cartItem.findFirst({
       where: {
-        cartId_productId: {
-          cartId: cart.id,
-          productId
-        }
+        cartId: cart.id,
+        productId,
+        variantId: variantId || null
       }
     });
 
     // update quantity if exists
     if (existingItem) {
       const updatedItem = await prisma.cartItem.update({
-        where: {
-          cartId_productId: {
-            cartId: cart.id,
-            productId
-          }
-        },
-        data: {
-          quantity: existingItem.quantity + quantity
-        }
+        where: { id: existingItem.id },
+        data: { quantity: existingItem.quantity + quantity },
+        include: { product: true, variant: true }
       });
 
       return res.json(updatedItem);
@@ -92,8 +96,10 @@ exports.addToCart = async (req, res) => {
       data: {
         cartId: cart.id,
         productId,
+        variantId: variantId || null,
         quantity
-      }
+      },
+      include: { product: true, variant: true }
     });
 
     res.json(item);
@@ -125,7 +131,8 @@ exports.updateCartItem = async (req, res) => {
 
     const updatedItem = await prisma.cartItem.update({
       where: { id: Number(req.params.id) },
-      data: { quantity }
+      data: { quantity },
+      include: { product: true, variant: true }
     });
 
     res.json(updatedItem);

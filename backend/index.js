@@ -9,6 +9,9 @@ const cartRoutes = require("./routes/cartRoutes");
 const orderRoutes = require("./routes/orderRoutes");
 const promotionRoutes = require("./routes/promotionRoutes");
 const dashboardRoutes = require("./routes/dashboardRoutes");
+const customDesignRoutes = require("./routes/customDesignRoutes");
+const customOrderRoutes = require("./routes/customOrderRoutes");
+const stitchingSettingsRoutes = require("./routes/stitchingSettingsRoutes");
 
 const app = express();
 
@@ -36,6 +39,9 @@ app.use("/api/cart", cartRoutes);
 app.use("/api/orders", orderRoutes);
 app.use("/api/promotions", promotionRoutes);
 app.use("/api/dashboard", dashboardRoutes);
+app.use("/api/custom-designs", customDesignRoutes);
+app.use("/api/custom-orders", customOrderRoutes);
+app.use("/api/stitching-settings", stitchingSettingsRoutes);
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {

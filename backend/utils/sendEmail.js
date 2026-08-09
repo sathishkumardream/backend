@@ -7,9 +7,9 @@
  * entirely and fails fast with a clear error instead of hanging.
  *
  * Required env vars:
- *   BREVO_API_KEY     from https://app.brevo.com/settings/keys/api
- *   EMAIL_FROM_NAME    e.g. "Elma's Fashion"
- *   EMAIL_FROM_ADDRESS must be a sender verified in your Brevo account
+ *   BREVO_API_KEY      from https://app.brevo.com/settings/keys/api
+ *   EMAIL_FROM_NAME     e.g. "Elma's Fashion"
+ *   EMAIL_FROM_ADDRESS  must be a sender verified in your Brevo account
  *                       (Brevo dashboard → Senders, Domains & Dedicated IPs)
  *
  * If these aren't set, sendEmail logs a warning and skips sending instead of crashing —

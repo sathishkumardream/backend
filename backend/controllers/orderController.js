@@ -1,9 +1,10 @@
 const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
 
-
 const FREE_SHIP_THRESHOLD = 999;
 const STANDARD_SHIPPING_FEE = 60;
+
+const ORDER_ITEM_INCLUDE = { orderItems: { include: { product: true, variant: true } } };
 
 // 🛒 CREATE ORDER (Checkout)
 exports.createOrder = async (req, res) => {
@@ -11,12 +12,12 @@ exports.createOrder = async (req, res) => {
     const userId = req.user.userId;
     const { couponCode, paymentMethod, address } = req.body;
 
-    // 1. Get cart with items
+    // 1. Get cart with items (including variant, if any)
     const cart = await prisma.cart.findUnique({
       where: { userId },
       include: {
         items: {
-          include: { product: true }
+          include: { product: true, variant: true }
         }
       }
     });
@@ -26,19 +27,25 @@ exports.createOrder = async (req, res) => {
       return res.status(400).json({ message: "Cart is empty" });
     }
 
-    // 3. Verify stock availability before placing the order
+    // 3. Verify stock availability before placing the order.
+    // When an item has a variant, that variant's own stock is authoritative —
+    // otherwise fall back to the product's stock (simple, non-variant products).
     for (const item of cart.items) {
-      if (item.quantity > item.product.stock) {
+      const availableStock = item.variant ? item.variant.stock : item.product.stock;
+      const label = item.variant
+        ? `${item.product.name} (${[item.variant.size, item.variant.color].filter(Boolean).join(" / ")})`
+        : item.product.name;
+
+      if (item.quantity > availableStock) {
         return res.status(400).json({
-          message: `Not enough stock for "${item.product.name}". Only ${item.product.stock} left.`
+          message: `Not enough stock for "${label}". Only ${availableStock} left.`
         });
       }
     }
 
-    // 4. Calculate subtotal
-    const subtotal = cart.items.reduce((sum, item) => {
-      return sum + item.quantity * item.product.price;
-    }, 0);
+    // 4. Calculate subtotal — a variant's own price overrides the product price if set.
+    const priceOf = (item) => (item.variant?.price ?? item.product.price);
+    const subtotal = cart.items.reduce((sum, item) => sum + item.quantity * priceOf(item), 0);
 
     // 5. Apply coupon (re-validated server-side, never trust the client)
     let discount = 0;
@@ -94,22 +101,28 @@ exports.createOrder = async (req, res) => {
           orderItems: {
             create: cart.items.map(item => ({
               productId: item.productId,
+              variantId: item.variantId || null,
               quantity: item.quantity,
-              price: item.product.price
+              price: priceOf(item)
             }))
           }
         },
-        include: {
-          orderItems: { include: { product: true } }
-        }
+        include: ORDER_ITEM_INCLUDE
       });
 
-      // Decrement stock for each purchased product
+      // Decrement stock — the variant's stock if this item has one, otherwise the product's.
       for (const item of cart.items) {
-        await tx.product.update({
-          where: { id: item.productId },
-          data: { stock: { decrement: item.quantity } }
-        });
+        if (item.variantId) {
+          await tx.productVariant.update({
+            where: { id: item.variantId },
+            data: { stock: { decrement: item.quantity } }
+          });
+        } else {
+          await tx.product.update({
+            where: { id: item.productId },
+            data: { stock: { decrement: item.quantity } }
+          });
+        }
       }
 
       // Track coupon usage
@@ -146,11 +159,7 @@ exports.getOrders = async (req, res) => {
 
     const orders = await prisma.order.findMany({
       where: { userId },
-      include: {
-        orderItems: {
-          include: { product: true }
-        }
-      },
+      include: ORDER_ITEM_INCLUDE,
       orderBy: {
         createdAt: "desc"
       }
@@ -172,11 +181,7 @@ exports.getOrderById = async (req, res) => {
 
     const order = await prisma.order.findUnique({
       where: { id: orderId },
-      include: {
-        orderItems: {
-          include: { product: true }
-        }
-      }
+      include: ORDER_ITEM_INCLUDE
     });
 
     if (!order) {
@@ -203,9 +208,7 @@ exports.getAllOrders = async (req, res) => {
     const orders = await prisma.order.findMany({
       include: {
         user: { select: { id: true, name: true, email: true } },
-        orderItems: {
-          include: { product: true }
-        }
+        ...ORDER_ITEM_INCLUDE
       },
       orderBy: {
         createdAt: "desc"

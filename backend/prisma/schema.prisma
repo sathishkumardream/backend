@@ -25,6 +25,7 @@ model User {
 
   cart   Cart[]
   orders Order[]
+  customOrders CustomOrder[]
 }
 
 model Promotion {
@@ -58,14 +59,37 @@ model Product {
   originalPrice Float?
   stock         Int
   image         String
-  sizes         String?  // comma-separated, e.g. "S,M,L,XL" — null/empty means no size selector shown
-  colors        String?  // comma-separated hex codes, e.g. "#2c3e50,#c9184a" — null/empty means no color selector shown
+  images        String[] @default([])
+  sizes         String?  // comma-separated, e.g. "S,M,L,XL" — legacy display-only, ignored once real variants exist
+  colors        String?  // comma-separated hex codes — legacy display-only, ignored once real variants exist
+  subcategory   String?
+  active        Boolean  @default(true)
   categoryId    Int
   category      Category @relation(fields: [categoryId], references: [id])
   createdAt     DateTime @default(now())
 
   cartItems  CartItem[]
   orderItems OrderItem[]
+  variants   ProductVariant[]
+  customOrdersAsSource CustomOrder[]
+}
+
+model ProductVariant {
+  id        Int      @id @default(autoincrement())
+  productId Int
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  size      String?
+  color     String?
+  price     Float?   // optional override; null = use the parent product's price
+  stock     Int      @default(0)
+  sku       String?  @unique
+  image     String?
+  createdAt DateTime @default(now())
+
+  cartItems  CartItem[]
+  orderItems OrderItem[]
+
+  @@unique([productId, size, color])
 }
 
 model Cart {
@@ -80,12 +104,12 @@ model CartItem {
   id        Int @id @default(autoincrement())
   cartId    Int
   productId Int
+  variantId Int?
   quantity  Int
 
-  cart    Cart    @relation(fields: [cartId], references: [id])
-  product Product @relation(fields: [productId], references: [id])
-
-  @@unique([cartId, productId])
+  cart    Cart            @relation(fields: [cartId], references: [id])
+  product Product         @relation(fields: [productId], references: [id])
+  variant ProductVariant? @relation(fields: [variantId], references: [id], onDelete: SetNull)
 }
 
 enum OrderStatus {
@@ -124,9 +148,80 @@ model OrderItem {
 
   orderId   Int
   productId Int
+  variantId Int?
   quantity  Int
   price     Float
 
-  order   Order   @relation(fields: [orderId], references: [id])
-  product Product @relation(fields: [productId], references: [id])
+  order   Order           @relation(fields: [orderId], references: [id])
+  product Product         @relation(fields: [productId], references: [id])
+  variant ProductVariant? @relation(fields: [variantId], references: [id], onDelete: SetNull)
+}
+
+// ─── Made For You (custom stitching) ───────────────────────────────────────
+
+model CustomDesign {
+  id        Int      @id @default(autoincrement())
+  name      String
+  image     String
+  comboType String   // "Mom & Daughter" | "Sisters Combo" | "Designer Blouse" | ...
+  tag       String?  // e.g. "New", "Trending"
+  basePrice Float    // fabric/design cost — one-time, shared across all recipients in a combo
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  customOrders CustomOrder[]
+}
+
+// Global, admin-configurable stitching labor cost by standard size — applied per garment/recipient,
+// on top of the one-time fabric cost, regardless of whether the fabric came from a design, a real
+// store saree, or the customer's own material.
+model StitchingSettings {
+  id          Int      @id @default(1)
+  sizePricing Json     // e.g. { "S": 499, "M": 599, "L": 699, "XL": 799, "XXL": 899 }
+  ownFabricFee Float   @default(799) // flat fallback when a recipient's size isn't in sizePricing
+  updatedAt   DateTime @updatedAt
+}
+
+model CustomOrder {
+  id     Int  @id @default(autoincrement())
+  userId Int
+  user   User @relation(fields: [userId], references: [id])
+
+  designId Int?
+  design   CustomDesign? @relation(fields: [designId], references: [id], onDelete: SetNull)
+
+  sourceProductId Int?
+  sourceProduct   Product? @relation(fields: [sourceProductId], references: [id], onDelete: SetNull)
+
+  comboType  String
+  fabricType String  // "design" | "own" | "store-product"
+
+  // One combo request can cover several people/garments cut from the same fabric —
+  // e.g. a Mom & Daughter combo needs two separately sized garments from one saree.
+  // Each entry: { label, sizeMode: "standard"|"custom", standardSize, measurements, stitchingCost }
+  recipients Json
+
+  // Stitching/tailoring details so the tailor knows exactly what to make — not just "notes".
+  blouseType    String? // e.g. "Sleeveless", "Short Sleeve", "Full Sleeve", "3/4 Sleeve"
+  neckPattern   String? // e.g. "Round", "Boat", "Sweetheart", "Collar", "Backless"
+  backDesign    String? // e.g. "Regular", "Deep Back", "Keyhole", "Tie-Back"
+  referenceImage String? // optional photo the customer uploads showing the exact look they want
+
+  notes String?
+
+  paymentMethod   String  @default("COD")
+  shippingName    String?
+  shippingPhone   String?
+  shippingLine1   String?
+  shippingLine2   String?
+  shippingCity    String?
+  shippingState   String?
+  shippingPincode String?
+
+  fabricCost    Float // one-time cost of the fabric/design (0 if customer supplied their own)
+  stitchingCost Float // sum of every recipient's stitching cost
+  price         Float // fabricCost + stitchingCost — grand total
+  status        String @default("PENDING") // PENDING, CONFIRMED, IN_PROGRESS, SHIPPED, DELIVERED
+
+  createdAt DateTime @default(now())
 }
