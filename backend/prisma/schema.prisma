@@ -21,11 +21,14 @@ model User {
   role              String    @default("USER")
   resetToken        String?
   resetTokenExpiry  DateTime?
+  preferredPaymentMethod String @default("COD")
+  savedUpiId        String?
   createdAt         DateTime  @default(now())
 
-  cart   Cart[]
-  orders Order[]
+  cart      Cart[]
+  orders    Order[]
   customOrders CustomOrder[]
+  addresses Address[]
 }
 
 model Promotion {
@@ -223,5 +226,21 @@ model CustomOrder {
   price         Float // fabricCost + stitchingCost — grand total
   status        String @default("PENDING") // PENDING, CONFIRMED, IN_PROGRESS, SHIPPED, DELIVERED
 
+  createdAt DateTime @default(now())
+}
+
+model Address {
+  id        Int     @id @default(autoincrement())
+  userId    Int
+  user      User    @relation(fields: [userId], references: [id])
+  label     String  @default("Home") // e.g. "Home", "Work"
+  name      String
+  phone     String
+  line1     String
+  line2     String?
+  city      String
+  state     String?
+  pincode   String
+  isDefault Boolean @default(false)
   createdAt DateTime @default(now())
 }
