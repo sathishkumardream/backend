@@ -84,6 +84,35 @@ exports.deletePromotion = async (req, res) => {
   }
 };
 
+// 🌐 PUBLIC — Get active, non-expired, still-usable promotions for homepage voucher display.
+// Doesn't expose admin-only fields like usedCount/createdAt — just what the storefront needs.
+exports.getActivePromotions = async (req, res) => {
+  try {
+    const now = new Date();
+    const promotions = await prisma.promotion.findMany({
+      where: {
+        active: true,
+        OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    const usable = promotions
+      .filter((p) => !p.usageLimit || p.usedCount < p.usageLimit)
+      .map((p) => ({
+        id: p.id,
+        code: p.code,
+        type: p.type,
+        value: p.value,
+        minOrderValue: p.minOrderValue,
+      }));
+
+    res.json(usable);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
 // 🌐 PUBLIC — Validate a coupon code against a cart subtotal
 // Returns the computed discount/shipping waiver WITHOUT mutating usage count.
 // Usage count is only incremented when an order is actually placed (see orderController).

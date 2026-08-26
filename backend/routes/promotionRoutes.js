@@ -10,10 +10,14 @@ const {
   updatePromotion,
   deletePromotion,
   validatePromotion,
+  getActivePromotions,
 } = require("../controllers/promotionController");
 
 // 🌐 PUBLIC — validate a coupon at checkout
 router.post("/validate", validatePromotion);
+
+// 🌐 PUBLIC — active promotions for the homepage voucher section
+router.get("/active", getActivePromotions);
 
 // 👑 ADMIN ONLY — manage promotions
 router.get("/", authMiddleware, adminMiddleware, getPromotions);
