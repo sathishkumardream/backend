@@ -241,6 +241,16 @@ model HeroBanner {
   updatedAt       DateTime @updatedAt
 }
 
+// Admin-uploaded lifestyle photo for one "Shop by Category" card (key = "men" |
+// "women" | "boys" | "girls", matching the frontend's hardcoded category keys).
+// No row / null imageUrl means the frontend falls back to its default
+// gradient + emoji card design.
+model CategoryImage {
+  key       String   @id
+  imageUrl  String?
+  updatedAt DateTime @updatedAt
+}
+
 model Address {
   id        Int     @id @default(autoincrement())
   userId    Int

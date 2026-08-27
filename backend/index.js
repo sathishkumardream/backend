@@ -13,6 +13,7 @@ const customDesignRoutes = require("./routes/customDesignRoutes");
 const customOrderRoutes = require("./routes/customOrderRoutes");
 const stitchingSettingsRoutes = require("./routes/stitchingSettingsRoutes");
 const heroBannerRoutes = require("./routes/heroBannerRoutes");
+const categoryImageRoutes = require("./routes/categoryImageRoutes");
 const addressRoutes = require("./routes/addressRoutes");
 const userRoutes = require("./routes/userRoutes");
 
@@ -46,6 +47,7 @@ app.use("/api/custom-designs", customDesignRoutes);
 app.use("/api/custom-orders", customOrderRoutes);
 app.use("/api/stitching-settings", stitchingSettingsRoutes);
 app.use("/api/hero-banner", heroBannerRoutes);
+app.use("/api/category-images", categoryImageRoutes);
 app.use("/api/addresses", addressRoutes);
 app.use("/api/users", userRoutes);
 
