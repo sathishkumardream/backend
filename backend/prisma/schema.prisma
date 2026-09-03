@@ -229,11 +229,23 @@ model CustomOrder {
   createdAt DateTime @default(now())
 }
 
-// Storefront hero banner (first carousel slide only). Headline/sub/CTA text
-// stay hardcoded in the frontend — admins can only override the background.
-// backgroundType "default" means "no override configured", so the frontend
-// falls back to its built-in gradient.
-model HeroBanner {
+// Storefront hero banner — one row per carousel slide ("slide1" | "slide2" |
+// "slide3"). Headline/sub/CTA text stay hardcoded in the frontend — admins can
+// only override each slide's background. backgroundType "default" means "no
+// override configured for this slide", so the frontend falls back to that
+// slide's built-in gradient.
+model HeroSlideBackground {
+  slideKey        String   @id
+  backgroundType  String   @default("default") // "default" | "image" | "color"
+  backgroundImage String?
+  backgroundColor String?
+  updatedAt       DateTime @updatedAt
+}
+
+// Storefront "End of Season Sale" style announcement banner. Same
+// background-only override pattern as the hero slides — text/badges/CTA stay
+// hardcoded in the frontend.
+model PromoBanner {
   id              Int      @id @default(1)
   backgroundType  String   @default("default") // "default" | "image" | "color"
   backgroundImage String?

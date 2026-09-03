@@ -4,9 +4,9 @@ const router = express.Router();
 const authMiddleware = require("../middleware/authMiddleware");
 const adminMiddleware = require("../middleware/adminMiddleware");
 
-const { getHeroBanner, updateHeroBanner } = require("../controllers/heroBannerController");
+const { getHeroSlideBackgrounds, updateHeroSlideBackground } = require("../controllers/heroBannerController");
 
-router.get("/", getHeroBanner);
-router.put("/", authMiddleware, adminMiddleware, updateHeroBanner);
+router.get("/", getHeroSlideBackgrounds);
+router.put("/:slideKey", authMiddleware, adminMiddleware, updateHeroSlideBackground);
 
 module.exports = router;
